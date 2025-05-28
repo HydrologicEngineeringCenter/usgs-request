@@ -1,0 +1,55 @@
+plugins {
+    id 'java'
+    id 'maven-publish'
+    id 'nebula.release' version '20.2.0'
+}
+
+group = 'mil.army.usace.hec'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation('com.googlecode.json-simple:json-simple:1.1.1') {
+        exclude group: 'junit', module: 'junit'
+    }
+    implementation 'org.jsoup:jsoup:1.20.1'
+    implementation 'org.glassfish.jersey.core:jersey-client:3.0.2'
+    runtimeOnly 'org.glassfish.jersey.inject:jersey-hk2:3.0.2'
+    runtimeOnly 'jakarta.activation:jakarta.activation-api:2.1.3'
+    testImplementation platform('org.junit:junit-bom:5.10.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            groupId = 'mil.army.usace.hec'
+            artifactId = 'usgs-request'
+            artifact jar
+        }
+    }
+    repositories {
+        maven {
+            credentials {
+                username = "$mavenUser"
+                password = "$mavenPassword"
+            }
+            def releasesRepoUrl = "https://www.hec.usace.army.mil/nexus/repository/maven-releases/"
+            def snapshotsRepoUrl = "https://www.hec.usace.army.mil/nexus/repository/maven-snapshots/"
+            url = version.toString().endsWith('SNAPSHOT') ? snapshotsRepoUrl : releasesRepoUrl
+        }
+    }
+}
+
+publish.dependsOn(build)
+snapshot.dependsOn(publish)
+candidate.dependsOn(publish)
+tasks.named('final') {
+    dependsOn publish
+}
