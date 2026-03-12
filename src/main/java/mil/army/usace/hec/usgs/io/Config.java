@@ -3,6 +3,8 @@ package mil.army.usace.hec.usgs.io;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 enum Config {
     INSTANCE;
@@ -11,13 +13,15 @@ enum Config {
 
     Config() {
         properties = new Properties();
+        Logger logger = Logger.getLogger(Config.class.getName());
         try (InputStream input = getClass().getClassLoader().getResourceAsStream("config.properties")) {
             if (input == null) {
-                throw new IllegalStateException("config.properties file not found in classpath");
+                logger.info("config.properties not found in classpath; using defaults");
+                return;
             }
             properties.load(input);
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to load config.properties", e);
+            logger.log(Level.WARNING, "Failed to load config.properties; using defaults", e);
         }
     }
 

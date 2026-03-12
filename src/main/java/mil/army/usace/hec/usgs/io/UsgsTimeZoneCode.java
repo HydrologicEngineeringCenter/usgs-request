@@ -6,7 +6,7 @@ import java.util.logging.Logger;
 
 /**
  * Time zone codes based on USGS data:
- * <a href="https://help.waterdata.usgs.gov/code/tz_query?fmt=html">...</a>
+ * <a href="https://api.waterdata.usgs.gov/ogcapi/v0/collections/time-zone-codes/items">...</a>
  */
 public enum UsgsTimeZoneCode {
     NZDT("NZDT", "New Zealand Daylight Time", ZoneOffset.ofHours(13)),
@@ -39,7 +39,7 @@ public enum UsgsTimeZoneCode {
     WAST("WAST", "West Australian Standard Time", ZoneOffset.ofHours(7)),
     ZP6("ZP6", "UTC +6 hours", ZoneOffset.ofHours(6)),
     ZP5("ZP5", "UTC +5 hours", ZoneOffset.ofHours(5)),
-    AFT("AFT", "Afghanistan Time", ZoneOffset.ofHours(4)),
+    AFT("AFT", "Afghanistan Time", ZoneOffset.ofHoursMinutes(4, 30)),
     ZP4("ZP4", "UTC +4 hours", ZoneOffset.ofHours(4)),
     BT("BT", "Baghdad Time", ZoneOffset.ofHours(3)),
     EETDST("EETDST", "Eastern Europe Daylight Time", ZoneOffset.ofHours(3)),
@@ -86,7 +86,7 @@ public enum UsgsTimeZoneCode {
     AKST("AKST", "Alaska Standard Time", ZoneOffset.ofHours(-9)),
     HDT("HDT", "Hawaii Daylight Time", ZoneOffset.ofHours(-9)),
     HST("HST", "Hawaii Standard Time", ZoneOffset.ofHours(-10)),
-    ZP_MINUS_11("ZP-11", "UTC +11 hours", ZoneOffset.ofHours(-11)),
+    ZP_MINUS_11("ZP-11", "UTC -11 hours", ZoneOffset.ofHours(-11)),
     IDLW("IDLW", "International Date Line, West", ZoneOffset.ofHours(-12)),
     UNDEFINED("UNDEFINED", "UNDEFINED", ZoneOffset.ofHours(0));
 
@@ -163,8 +163,12 @@ public enum UsgsTimeZoneCode {
      * @return The matching UsgsTimeZoneCode.
      */
     public static UsgsTimeZoneCode parse(String str) {
+        if (str == null || str.isBlank())
+            return UsgsTimeZoneCode.UNDEFINED;
+
         for (UsgsTimeZoneCode value : UsgsTimeZoneCode.values()) {
-            if (value.code.equalsIgnoreCase(str) || str.toLowerCase().contains(value.name.toLowerCase()))
+            if (value.code.equalsIgnoreCase(str) || value.name.equalsIgnoreCase(str)
+                    || value.toString().equalsIgnoreCase(str))
                 return value;
         }
 

@@ -1,14 +1,12 @@
 package mil.army.usace.hec.usgs.io;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.ZonedDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class UsgsGageRecord {
-    private final UsgsSite usgsSite;
+    private final UsgsMonitoringLocation usgsMonitoringLocation;
     private final ZonedDateTime[] times;
     private final long intervalSeconds;
     private final double[] values;
@@ -16,7 +14,7 @@ public class UsgsGageRecord {
     private final UsgsParameter parameter;
 
     private UsgsGageRecord(Builder builder) {
-        usgsSite = builder.usgsSite;
+        usgsMonitoringLocation = builder.usgsMonitoringLocation;
         noDataValue = builder.noDataValue;
         parameter = builder.parameter;
 
@@ -28,24 +26,24 @@ public class UsgsGageRecord {
     }
 
     public static class Builder {
-        private UsgsSite usgsSite;
+        private UsgsMonitoringLocation usgsMonitoringLocation;
         private ZonedDateTime[] times;
         private double[] values;
         private double noDataValue;
         private UsgsParameter parameter;
 
-        public Builder setSite(UsgsSite usgsSite) {
-            this.usgsSite = usgsSite;
+        public Builder setMonitoringLocation(UsgsMonitoringLocation usgsMonitoringLocation) {
+            this.usgsMonitoringLocation = usgsMonitoringLocation;
             return this;
         }
 
         public Builder setTimes(ZonedDateTime[] times) {
-            this.times = times;
+            this.times = times.clone();
             return this;
         }
 
         public Builder setValues(double[] values) {
-            this.values = values;
+            this.values = values.clone();
             return this;
         }
 
@@ -60,8 +58,8 @@ public class UsgsGageRecord {
         }
 
         public UsgsGageRecord build() {
-            if (usgsSite == null)
-                throw new IllegalStateException("Site number must be provided");
+            if (usgsMonitoringLocation == null)
+                throw new IllegalStateException("Monitoring location must be provided");
             if (parameter == null)
                 throw new IllegalStateException("Parameter must be provided");
             if (times == null)
@@ -81,15 +79,15 @@ public class UsgsGageRecord {
 
     public static UsgsGageRecord empty() {
         return UsgsGageRecord.builder()
-                .setSite(UsgsSite.empty())
+                .setMonitoringLocation(UsgsMonitoringLocation.empty())
                 .setTimes(new ZonedDateTime[0])
                 .setValues(new double[0])
                 .setParameter(UsgsParameter.UNKNOWN)
                 .build();
     }
 
-    public UsgsSite getSite() {
-        return usgsSite;
+    public UsgsMonitoringLocation getMonitoringLocation() {
+        return usgsMonitoringLocation;
     }
 
     public UsgsParameter getParameter() {
@@ -97,7 +95,7 @@ public class UsgsGageRecord {
     }
 
     public ZonedDateTime[] getTimes() {
-        return times;
+        return times.clone();
     }
 
     public long getIntervalSeconds() {
@@ -105,7 +103,7 @@ public class UsgsGageRecord {
     }
 
     public double[] getValues() {
-        return values;
+        return values.clone();
     }
 
     public double getNoDataValue() {
@@ -137,25 +135,65 @@ public class UsgsGageRecord {
     }
 
     private static TimesValuesInterval normalize(ZonedDateTime[] times, double[] values, double noDataValue) {
-        List<ZonedDateTime> normalizedTimes = new ArrayList<>();
-        List<Double> normalizedValues = new ArrayList<>();
-
         if (times.length == 0)
             return new TimesValuesInterval(new ZonedDateTime[]{}, new double[]{}, 0);
 
-        long intervalSeconds = getMostCommonIntervalSeconds(times);
-        ZonedDateTime minTime = times[0];
-        ZonedDateTime maxTime = times[times.length - 1];
+        if (times.length == 1)
+            return new TimesValuesInterval(
+                    new ZonedDateTime[]{times[0]},
+                    new double[]{values[0]},
+                    0);
 
-        Map<Long, Double> timeValueMap = new HashMap<>();
-        for (int i = 0; i < times.length; i++) {
-            timeValueMap.put(times[i].toEpochSecond(), values[i]);
+        // Sort by time, keeping time-value pairs together
+        Integer[] indices = new Integer[times.length];
+        for (int i = 0; i < indices.length; i++) indices[i] = i;
+        Arrays.sort(indices, Comparator.comparing(a -> times[a]));
+
+        ZonedDateTime[] sortedTimes = new ZonedDateTime[times.length];
+        double[] sortedValues = new double[times.length];
+        for (int i = 0; i < indices.length; i++) {
+            sortedTimes[i] = times[indices[i]];
+            sortedValues[i] = values[indices[i]];
         }
 
+        long intervalSeconds = getMostCommonIntervalSeconds(sortedTimes);
+        ZonedDateTime minTime = sortedTimes[0];
+        ZonedDateTime maxTime = sortedTimes[sortedTimes.length - 1];
+
+        // Use Instant keys for zone-safe lookups (ZonedDateTime.equals considers zone identity)
+        Map<Instant, Double> instantValueMap = new HashMap<>();
+        for (int i = 0; i < sortedTimes.length; i++) {
+            instantValueMap.putIfAbsent(sortedTimes[i].toInstant(), sortedValues[i]);
+        }
+
+        // Guard against pathological data producing huge arrays
+        long expectedSteps = intervalSeconds > 0
+                ? Duration.between(minTime, maxTime).toSeconds() / intervalSeconds
+                : 0;
+
+        if (intervalSeconds <= 0 || expectedSteps > 1_000_000) {
+            // Skip gap-filling but still use deduped data from the map
+            ZonedDateTime[] dedupedTimes = new ZonedDateTime[instantValueMap.size()];
+            double[] dedupedValues = new double[instantValueMap.size()];
+            int idx = 0;
+            for (ZonedDateTime sortedTime : sortedTimes) {
+                Instant key = sortedTime.toInstant();
+                if (instantValueMap.containsKey(key)) {
+                    dedupedTimes[idx] = sortedTime;
+                    dedupedValues[idx] = instantValueMap.remove(key);
+                    idx++;
+                }
+            }
+            return new TimesValuesInterval(dedupedTimes, dedupedValues, intervalSeconds);
+        }
+
+        List<ZonedDateTime> normalizedTimes = new ArrayList<>();
+        List<Double> normalizedValues = new ArrayList<>();
+
         ZonedDateTime time = minTime;
-        while (intervalSeconds > 0 && !time.isAfter(maxTime)) {
+        while (!time.isAfter(maxTime)) {
             normalizedTimes.add(time);
-            normalizedValues.add(timeValueMap.getOrDefault(time.toEpochSecond(), noDataValue));
+            normalizedValues.add(instantValueMap.getOrDefault(time.toInstant(), noDataValue));
             time = time.plusSeconds(intervalSeconds);
         }
 

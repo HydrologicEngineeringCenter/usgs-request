@@ -1,0 +1,61 @@
+{
+  "type":"FeatureCollection",
+  "features":[
+    {
+      "type":"Feature",
+      "properties":{
+        "unit_of_measure":"ft^3/s",
+        "statistic_id":"00011",
+        "begin":"2005-12-26T00:52:00.000001",
+        "computation_identifier":"Instantaneous",
+        "sublocation_identifier":"",
+        "monitoring_location_id":"USGS-03034000",
+        "parameter_description":"Discharge, cubic feet per second",
+        "parameter_name":"Discharge",
+        "parameter_code":"00060",
+        "last_modified":"2025-07-14T09:56:08.567978",
+        "end":"2025-07-14T08:45:00.000001",
+        "computation_period_identifier":"Points",
+        "thresholds":[],
+        "primary":"Primary",
+        "web_description":null
+      },
+      "id":"0efd52c0d4fe4526892edc92bb0a9738",
+      "geometry":{
+        "type":"Point",
+        "coordinates":[
+          -79.0083673833336,
+          40.9392310533772
+        ]
+      }
+    }
+  ],
+  "numberReturned":1,
+  "links":[
+    {
+      "type":"application/geo+json",
+      "rel":"self",
+      "title":"This document as GeoJSON",
+      "href":"https://api.waterdata.usgs.gov/ogcapi/v0/collections/time-series-metadata/items?f=json&bbox=-79.0344531,40.8611339,-78.6874107,41.0845925&parameter_code=00060&statistic_id=00011"
+    },
+    {
+      "rel":"alternate",
+      "type":"application/ld+json",
+      "title":"This document as RDF (JSON-LD)",
+      "href":"https://api.waterdata.usgs.gov/ogcapi/v0/collections/time-series-metadata/items?f=jsonld&bbox=-79.0344531,40.8611339,-78.6874107,41.0845925&parameter_code=00060&statistic_id=00011"
+    },
+    {
+      "type":"text/html",
+      "rel":"alternate",
+      "title":"This document as HTML",
+      "href":"https://api.waterdata.usgs.gov/ogcapi/v0/collections/time-series-metadata/items?f=html&bbox=-79.0344531,40.8611339,-78.6874107,41.0845925&parameter_code=00060&statistic_id=00011"
+    },
+    {
+      "type":"application/json",
+      "title":"Time series metadata",
+      "rel":"collection",
+      "href":"https://api.waterdata.usgs.gov/ogcapi/v0/collections/time-series-metadata"
+    }
+  ],
+  "timeStamp":"2025-07-14T22:42:00.599255Z"
+}
