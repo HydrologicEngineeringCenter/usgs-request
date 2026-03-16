@@ -17,8 +17,7 @@ class UrlValidator {
         if (UrlValidator.isSafeUrl(urlString))
             return urlString;
 
-        LOGGER.log(Level.SEVERE, () -> "BAD URL: " + urlString);
-        return "";
+        throw new IllegalArgumentException("URL failed validation: " + urlString);
     }
 
     private static boolean isSafeUrl(String urlString) {
@@ -49,11 +48,12 @@ class UrlValidator {
 
             return address.isAnyLocalAddress()     // 0.0.0.0
                     || address.isLoopbackAddress()     // 127.0.0.1
-                    || address.isSiteLocalAddress();   // 10.x.x.x, 192.168.x.x, 172.16.x.x–172.31.x.x
+                    || address.isSiteLocalAddress()    // 10.x.x.x, 192.168.x.x, 172.16.x.x-172.31.x.x
+                    || address.isLinkLocalAddress();   // 169.254.x.x (e.g. cloud metadata services)
 
         } catch (UnknownHostException e) {
             LOGGER.log(Level.SEVERE, () -> "Invalid or unresolvable URL: " + e.getMessage());
-            return false;
+            return true;
         }
     }
 }

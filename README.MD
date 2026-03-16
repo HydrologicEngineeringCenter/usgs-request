@@ -1,17 +1,18 @@
 # usgs-request
 
-`usgs-request` is a library for interacting with the USGS REST API services. It retrieves site and time-series data from the following endpoints:
+`usgs-request` is a library for interacting with the [USGS OGC API](https://api.waterdata.usgs.gov/ogcapi/v0/). It retrieves monitoring location and time-series data from the following collections:
 
-- **[Site Service](https://waterservices.usgs.gov/docs/site-service/)** – Retrieve metadata about monitoring locations
-- **[Instantaneous Values Service](https://waterservices.usgs.gov/docs/instantaneous-values/instantaneous-values-details/)** – Access near real-time measurements
-- **[Daily Values Service](https://waterservices.usgs.gov/docs/dv-service/daily-values-service-details/)** – Access daily summaries of hydrologic data
+- **[Monitoring Locations](https://api.waterdata.usgs.gov/ogcapi/v0/collections/monitoring-locations/)** – Retrieve metadata about monitoring locations
+- **[Time Series Metadata](https://api.waterdata.usgs.gov/ogcapi/v0/collections/time-series-metadata/)** – Access metadata about available time series
+- **[Daily Values](https://api.waterdata.usgs.gov/ogcapi/v0/collections/daily/)** – Access daily summaries of hydrologic data
+- **[Continuous Values](https://api.waterdata.usgs.gov/ogcapi/v0/collections/continuous/)** – Access continuous (instantaneous) measurements
 
 ## Features
 
-- Query and retrieve data from USGS water services
-- Support for site, instantaneous values, and daily values services
+- Query and retrieve data from USGS OGC API services
+- Support for monitoring locations, time-series metadata, daily values, and continuous values collections
 - Time-series data fetching for analysis or storage
-- Parse rdb and json strings from USGS
+- JSON response parsing
 
 ## Getting Started
 
