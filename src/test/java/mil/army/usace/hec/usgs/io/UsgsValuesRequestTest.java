@@ -3,11 +3,11 @@ package mil.army.usace.hec.usgs.io;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class UsgsValuesRequestTest {
 
@@ -15,11 +15,19 @@ class UsgsValuesRequestTest {
         return UsgsMonitoringLocation.from("USGS-03034000");
     }
 
+    private static UsgsValuesRequest.Builder validBuilder() {
+        return UsgsValuesRequest.builder()
+                .setService(UsgsService.CONTINUOUS)
+                .addMonitoringLocation(testLocation())
+                .setParameter(UsgsParameter.DISCHARGE_CFS);
+    }
+
     @Test
     void buildThrowsWhenServiceNull() {
         assertThrows(IllegalStateException.class, () ->
                 UsgsValuesRequest.builder()
                         .addMonitoringLocation(testLocation())
+                        .setParameter(UsgsParameter.DISCHARGE_CFS)
                         .build());
     }
 
@@ -28,6 +36,16 @@ class UsgsValuesRequestTest {
         assertThrows(IllegalStateException.class, () ->
                 UsgsValuesRequest.builder()
                         .setService(UsgsService.CONTINUOUS)
+                        .setParameter(UsgsParameter.DISCHARGE_CFS)
+                        .build());
+    }
+
+    @Test
+    void buildThrowsWhenParameterNull() {
+        assertThrows(IllegalStateException.class, () ->
+                UsgsValuesRequest.builder()
+                        .setService(UsgsService.CONTINUOUS)
+                        .addMonitoringLocation(testLocation())
                         .build());
     }
 
@@ -36,9 +54,7 @@ class UsgsValuesRequestTest {
         ZonedDateTime begin = ZonedDateTime.of(2024, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
 
         assertThrows(IllegalStateException.class, () ->
-                UsgsValuesRequest.builder()
-                        .setService(UsgsService.CONTINUOUS)
-                        .addMonitoringLocation(testLocation())
+                validBuilder()
                         .setDuration(Duration.ofHours(3))
                         .setBeginTime(begin)
                         .build());
@@ -50,9 +66,7 @@ class UsgsValuesRequestTest {
         ZonedDateTime end = ZonedDateTime.of(2024, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
 
         assertThrows(IllegalStateException.class, () ->
-                UsgsValuesRequest.builder()
-                        .setService(UsgsService.CONTINUOUS)
-                        .addMonitoringLocation(testLocation())
+                validBuilder()
                         .setBeginTime(begin)
                         .setEndTime(end)
                         .build());
@@ -63,9 +77,7 @@ class UsgsValuesRequestTest {
         ZonedDateTime time = ZonedDateTime.of(2024, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
 
         assertThrows(IllegalStateException.class, () ->
-                UsgsValuesRequest.builder()
-                        .setService(UsgsService.CONTINUOUS)
-                        .addMonitoringLocation(testLocation())
+                validBuilder()
                         .setBeginTime(time)
                         .setEndTime(time)
                         .build());
@@ -74,9 +86,7 @@ class UsgsValuesRequestTest {
     @Test
     void buildThrowsWhenDurationNegative() {
         assertThrows(IllegalStateException.class, () ->
-                UsgsValuesRequest.builder()
-                        .setService(UsgsService.CONTINUOUS)
-                        .addMonitoringLocation(testLocation())
+                validBuilder()
                         .setDuration(Duration.ofHours(-3))
                         .build());
     }
@@ -84,18 +94,14 @@ class UsgsValuesRequestTest {
     @Test
     void buildThrowsWhenDurationZero() {
         assertThrows(IllegalStateException.class, () ->
-                UsgsValuesRequest.builder()
-                        .setService(UsgsService.CONTINUOUS)
-                        .addMonitoringLocation(testLocation())
+                validBuilder()
                         .setDuration(Duration.ZERO)
                         .build());
     }
 
     @Test
     void toStringFormatsDuration() {
-        UsgsValuesRequest request = UsgsValuesRequest.builder()
-                .setService(UsgsService.CONTINUOUS)
-                .addMonitoringLocation(testLocation())
+        UsgsValuesRequest request = validBuilder()
                 .setDuration(Duration.ofHours(3))
                 .build();
 
@@ -107,28 +113,24 @@ class UsgsValuesRequestTest {
         ZonedDateTime begin = ZonedDateTime.of(2024, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
         ZonedDateTime end = ZonedDateTime.of(2024, 2, 1, 0, 0, 0, 0, ZoneOffset.UTC);
 
-        UsgsValuesRequest request = UsgsValuesRequest.builder()
-                .setService(UsgsService.CONTINUOUS)
-                .addMonitoringLocation(testLocation())
+        UsgsValuesRequest request = validBuilder()
                 .setBeginTime(begin)
                 .setEndTime(end)
                 .build();
 
         String url = request.toString();
-        assertTrue(url.contains("&time=" + begin + "/" + end));
+        assertTrue(url.contains("&time=2024-01-01T00:00:00Z/2024-02-01T00:00:00Z"));
     }
 
     @Test
     void toStringFormatsBeginOnly() {
         ZonedDateTime begin = ZonedDateTime.of(2024, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
 
-        UsgsValuesRequest request = UsgsValuesRequest.builder()
-                .setService(UsgsService.CONTINUOUS)
-                .addMonitoringLocation(testLocation())
+        UsgsValuesRequest request = validBuilder()
                 .setBeginTime(begin)
                 .build();
 
-        assertTrue(request.toString().contains("&time=" + begin + "/.."));
+        assertTrue(request.toString().contains("&time=2024-01-01T00:00:00Z/.."));
     }
 
     @Test
@@ -138,9 +140,25 @@ class UsgsValuesRequestTest {
         UsgsValuesRequest request = UsgsValuesRequest.builder()
                 .setService(UsgsService.DAILY)
                 .addMonitoringLocation(testLocation())
+                .setParameter(UsgsParameter.DISCHARGE_CFS)
                 .setEndTime(end)
                 .build();
 
-        assertTrue(request.toString().contains("&time=../" + end));
+        assertTrue(request.toString().contains("&time=../2024-02-01T00:00:00Z"));
+    }
+
+    @Test
+    void toStringNormalizesNonUtcTimesToUtc() {
+        ZonedDateTime estBegin = ZonedDateTime.of(2024, 1, 1, 0, 0, 0, 0, ZoneId.of("America/New_York"));
+        ZonedDateTime estEnd = ZonedDateTime.of(2024, 2, 1, 0, 0, 0, 0, ZoneId.of("America/New_York"));
+
+        UsgsValuesRequest request = validBuilder()
+                .setBeginTime(estBegin)
+                .setEndTime(estEnd)
+                .build();
+
+        String url = request.toString();
+        // EST is UTC-5, so midnight EST = 05:00 UTC
+        assertTrue(url.contains("&time=2024-01-01T05:00:00Z/2024-02-01T05:00:00Z"));
     }
 }

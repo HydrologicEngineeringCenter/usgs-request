@@ -43,6 +43,9 @@ public abstract class UsgsRequest {
             JSONParser parser = new JSONParser();
             JSONObject firstJson = (JSONObject) parser.parse(firstBody);
 
+            // Detect API error responses returned with 200 status
+            checkForApiError(firstJson);
+
             String nextUrl = getNextLink(firstJson);
             if (nextUrl == null) {
                 return firstBody;
@@ -126,6 +129,15 @@ public abstract class UsgsRequest {
             }
         }
         return null;
+    }
+
+    private static void checkForApiError(JSONObject json) {
+        Object code = json.get("code");
+        if (code != null && !json.containsKey("features")) {
+            String description = (String) json.get("description");
+            String message = description != null ? description : String.valueOf(code);
+            throw new UsgsRequestException(message);
+        }
     }
 
     private String extractErrorMessage(String body) {

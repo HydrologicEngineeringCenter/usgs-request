@@ -1,7 +1,9 @@
 package mil.army.usace.hec.usgs.io;
 
 import java.time.Duration;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -94,6 +96,10 @@ public abstract class UsgsValuesRequest extends UsgsRequest {
                 throw new IllegalStateException("At least one monitoring location must be provided");
             }
 
+            // Validate parameter
+            if (parameter == null)
+                throw new IllegalStateException("Parameter must be provided");
+
             // Validate that duration is positive
             if (duration != null && (duration.isZero() || duration.isNegative())) {
                 throw new IllegalStateException("Duration must be positive");
@@ -178,14 +184,19 @@ public abstract class UsgsValuesRequest extends UsgsRequest {
             return "&time=" + duration;
 
         if (beginTime != null && endTime != null)
-            return "&time=" + beginTime + "/" + endTime;
+            return "&time=" + toUtcString(beginTime) + "/" + toUtcString(endTime);
 
         if (beginTime != null)
-            return "&time=" + beginTime + "/..";
+            return "&time=" + toUtcString(beginTime) + "/..";
 
         if (endTime != null)
-            return "&time=../" + endTime;
+            return "&time=../" + toUtcString(endTime);
 
         return "";
+    }
+
+    private static String toUtcString(ZonedDateTime time) {
+        return time.withZoneSameInstant(ZoneOffset.UTC)
+                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
     }
 }
