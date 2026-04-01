@@ -25,6 +25,7 @@ public class UsgsTimeSeriesMetadataRequest extends UsgsRequest {
     private final ZonedDateTime endTime;
 
     UsgsTimeSeriesMetadataRequest(Builder builder) {
+        super(builder.apiKey);
         degreesNorth = builder.degreesNorth;
         degreesSouth = builder.degreesSouth;
         degreesEast = builder.degreesEast;
@@ -48,6 +49,7 @@ public class UsgsTimeSeriesMetadataRequest extends UsgsRequest {
 
         private ZonedDateTime beginTime;
         private ZonedDateTime endTime;
+        private String apiKey;
 
         public Builder setBoundingBox(double degreesNorth, double degreesSouth, double degreesEast, double degreesWest) {
             this.degreesNorth = degreesNorth;
@@ -77,6 +79,11 @@ public class UsgsTimeSeriesMetadataRequest extends UsgsRequest {
             return this;
         }
 
+        public Builder setApiKey(String apiKey) {
+            this.apiKey = apiKey;
+            return this;
+        }
+
         public UsgsTimeSeriesMetadataRequest build() {
             return new UsgsTimeSeriesMetadataRequest(this);
         }
@@ -95,7 +102,8 @@ public class UsgsTimeSeriesMetadataRequest extends UsgsRequest {
                 formatStatisticId() +
                 formatBeginTime() +
                 formatEndTime() +
-                LIMIT_10000;
+                LIMIT_10000 +
+                formatApiKey();
     }
 
     private static String getTimeSeriesMetadataUrl() {

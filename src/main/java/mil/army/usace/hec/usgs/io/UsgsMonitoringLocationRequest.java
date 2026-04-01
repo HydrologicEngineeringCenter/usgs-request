@@ -20,6 +20,7 @@ public class UsgsMonitoringLocationRequest extends UsgsRequest {
     private final List<String> ids;
 
     UsgsMonitoringLocationRequest(Builder builder) {
+        super(builder.apiKey);
         degreesNorth = builder.degreesNorth;
         degreesSouth = builder.degreesSouth;
         degreesEast = builder.degreesEast;
@@ -35,6 +36,7 @@ public class UsgsMonitoringLocationRequest extends UsgsRequest {
         private double degreesWest = Double.NaN;
 
         private final List<String> ids = new ArrayList<>();
+        private String apiKey;
 
         public Builder setBoundingBox(double degreesNorth, double degreesSouth, double degreesEast, double degreesWest) {
             this.degreesNorth = degreesNorth;
@@ -51,6 +53,11 @@ public class UsgsMonitoringLocationRequest extends UsgsRequest {
 
         public Builder addIds(List<String> ids) {
             this.ids.addAll(ids);
+            return this;
+        }
+
+        public Builder setApiKey(String apiKey) {
+            this.apiKey = apiKey;
             return this;
         }
 
@@ -74,7 +81,8 @@ public class UsgsMonitoringLocationRequest extends UsgsRequest {
                 FORMAT_JSON +
                 formatIds() +
                 formatBoundingBox() +
-                LIMIT_10000;
+                LIMIT_10000 +
+                formatApiKey();
     }
 
     private static String getUsgsMonitoringLocationsUrl() {

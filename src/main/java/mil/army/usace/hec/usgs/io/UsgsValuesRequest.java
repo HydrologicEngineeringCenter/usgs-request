@@ -23,6 +23,7 @@ public abstract class UsgsValuesRequest extends UsgsRequest {
     private final Duration duration;
 
     UsgsValuesRequest(Builder builder) {
+        super(builder.apiKey);
         monitoringLocations = List.copyOf(builder.monitoringLocations);
         service = builder.service;
 
@@ -45,6 +46,7 @@ public abstract class UsgsValuesRequest extends UsgsRequest {
         private ZonedDateTime beginTime;
         private ZonedDateTime endTime;
         private Duration duration;
+        private String apiKey;
 
         public Builder addMonitoringLocation(UsgsMonitoringLocation location) {
             this.monitoringLocations.add(location);
@@ -83,6 +85,11 @@ public abstract class UsgsValuesRequest extends UsgsRequest {
 
         public Builder setDuration(Duration duration) {
             this.duration = duration;
+            return this;
+        }
+
+        public Builder setApiKey(String apiKey) {
+            this.apiKey = apiKey;
             return this;
         }
 
@@ -138,7 +145,8 @@ public abstract class UsgsValuesRequest extends UsgsRequest {
                 formatParameterCode() +
                 formatStatisticId() +
                 formatTime() +
-                LIMIT_10000;
+                LIMIT_10000 +
+                formatApiKey();
     }
 
     public List<UsgsMonitoringLocation> getMonitoringLocations() {

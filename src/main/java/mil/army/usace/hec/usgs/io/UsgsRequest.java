@@ -27,8 +27,21 @@ public abstract class UsgsRequest {
     private static final Client CLIENT = ClientBuilder.newClient();
 
     private final PropertyChangeSupport support = new PropertyChangeSupport(this);
+    private final String apiKey;
 
     UsgsRequest() {
+        this(null);
+    }
+
+    UsgsRequest(String apiKey) {
+        this.apiKey = apiKey;
+    }
+
+    String formatApiKey() {
+        if (apiKey == null || apiKey.isBlank() || !UsgsApiKeyValidator.isValid(apiKey))
+            return "";
+
+        return "&api_key=" + apiKey;
     }
 
     @SuppressWarnings("unchecked")
