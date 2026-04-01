@@ -5,9 +5,8 @@ import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
-import java.time.*;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -24,6 +23,20 @@ public class UsgsValuesParser {
      * @return UsgsGageRecords parsed from the JSON data
      */
     public static UsgsGageRecords parse(String json) {
+        return parse(json, ZoneOffset.UTC);
+    }
+
+    /**
+     * Parse USGS values JSON data from a string
+     *
+     * @param json       The string containing JSON data
+     * @param zoneOffset The time zone offset to apply when the time string does not include
+     *                   time zone information, such as date-only strings from daily data.
+     *                   Timestamps that already include an offset (e.g. continuous data) are
+     *                   unaffected by this parameter.
+     * @return UsgsGageRecords parsed from the JSON data
+     */
+    public static UsgsGageRecords parse(String json, ZoneOffset zoneOffset) {
         if (json == null)
             return UsgsGageRecords.from(Collections.emptyList());
 
@@ -61,7 +74,7 @@ public class UsgsValuesParser {
                 }
 
                 // Parse time and value
-                ZonedDateTime zonedDateTime = parseToZonedDateTime(timeStr);
+                ZonedDateTime zonedDateTime = parseToZonedDateTime(timeStr, zoneOffset);
                 double value = parseValue(valueStr);
 
                 // Create a key for this site and parameter combination
@@ -121,22 +134,11 @@ public class UsgsValuesParser {
         return UsgsGageRecords.from(usgsGageRecords);
     }
 
-    private static ZonedDateTime parseToZonedDateTime(String s) {
+    private static ZonedDateTime parseToZonedDateTime(String s, ZoneOffset zoneOffset) {
         if (s.indexOf('T') < 0) {
-            // date-only -> assume UTC at start of day
-            return LocalDate.parse(s, DateTimeFormatter.ISO_LOCAL_DATE)
-                    .atStartOfDay(ZoneOffset.UTC);
+            return UsgsDailyValuesParser.parseTime(s, zoneOffset);
         }
-
-        try {
-            // has time with an offset like +00:00 or Z
-            return OffsetDateTime.parse(s, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-                    .atZoneSameInstant(ZoneOffset.UTC);
-        } catch (DateTimeParseException e) {
-            // has time but no offset — assume UTC
-            return LocalDateTime.parse(s, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                    .atZone(ZoneOffset.UTC);
-        }
+        return UsgsContinuousValuesParser.parseTime(s);
     }
 
     private static double parseValue(String valueStr) {

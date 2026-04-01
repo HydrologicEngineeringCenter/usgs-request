@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.ZoneOffset;
 import java.util.Objects;
 
 class UsgsValuesParserTest {
@@ -33,6 +34,32 @@ class UsgsValuesParserTest {
                 .filter(UsgsParameter.DISCHARGE_CFS)
                 .first();
         Assertions.assertEquals(10, usgsGageRecord.size());
+    }
+
+    /*
+     * Criteria:
+     * Service: daily
+     * Monitoring location ID: USGS-03034000
+     * Begin time: 1-Oct-1951
+     * End time: 31-Oct-1951
+     */
+    @Test
+    void parseDailyWithZoneOffset() throws IOException {
+        URL inUrl = Objects.requireNonNull(getClass().getResource(
+                "/usgs_daily_mahoning.json"));
+
+        Path path = new File(inUrl.getFile()).toPath();
+
+        String response = Files.readString(path);
+        ZoneOffset est = ZoneOffset.ofHours(-5);
+        UsgsGageRecords usgsGageRecords = UsgsValuesParser.parse(response, est);
+        UsgsGageRecord usgsGageRecord = usgsGageRecords
+                .filter(UsgsMonitoringLocation.from("USGS-03034000"))
+                .filter(UsgsParameter.DISCHARGE_CFS)
+                .first();
+        Assertions.assertEquals(31, usgsGageRecord.size());
+        // Verify the zone offset is applied to daily values
+        Assertions.assertEquals(est, usgsGageRecord.getTimes()[0].getOffset());
     }
 
     /*

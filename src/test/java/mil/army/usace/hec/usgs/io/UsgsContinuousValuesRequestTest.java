@@ -3,10 +3,14 @@ package mil.army.usace.hec.usgs.io;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class UsgsContinuousValuesRequestTest {
 
@@ -100,6 +104,62 @@ class UsgsContinuousValuesRequestTest {
             System.out.println(record.getMonitoringLocation().getMonitoringLocationId()
                     + " -> " + record.getTimes().length + " values");
         }
+    }
+
+    @Disabled("Live API smoke test")
+    @Test
+    void requestUtcVsMinusFourOffsetByFourHours() {
+        String id = "USGS-03034000";
+        UsgsMonitoringLocation location = UsgsMonitoringLocation.from(id);
+
+        // Same wall-clock times, different zones: UTC and UTC-4
+        ZonedDateTime beginUtc = ZonedDateTime.of(2018, 9, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+        ZonedDateTime endUtc = ZonedDateTime.of(2018, 9, 29, 0, 0, 0, 0, ZoneOffset.UTC);
+
+        ZonedDateTime beginMinus4 = ZonedDateTime.of(2018, 9, 1, 0, 0, 0, 0, ZoneOffset.ofHours(-4));
+        ZonedDateTime endMinus4 = ZonedDateTime.of(2018, 9, 29, 0, 0, 0, 0, ZoneOffset.ofHours(-4));
+
+        // Request with UTC times
+        UsgsValuesRequest utcRequest = UsgsValuesRequest.builder()
+                .setService(UsgsService.CONTINUOUS)
+                .addMonitoringLocation(location)
+                .setParameter(UsgsParameter.DISCHARGE_CFS)
+                .setStatisticType(UsgsStatisticId.INSTANTANEOUS)
+                .setBeginTime(beginUtc)
+                .setEndTime(endUtc)
+                .build();
+
+        // Request with UTC-4 times (same wall clock, so actual instant is 4 hours later)
+        UsgsValuesRequest minus4Request = UsgsValuesRequest.builder()
+                .setService(UsgsService.CONTINUOUS)
+                .addMonitoringLocation(location)
+                .setParameter(UsgsParameter.DISCHARGE_CFS)
+                .setStatisticType(UsgsStatisticId.INSTANTANEOUS)
+                .setBeginTime(beginMinus4)
+                .setEndTime(endMinus4)
+                .build();
+
+        UsgsGageRecord utcRecord = UsgsValuesParser.parse(utcRequest.retrieve())
+                .filter(location)
+                .filter(UsgsParameter.DISCHARGE_CFS)
+                .first();
+
+        UsgsGageRecord minus4Record = UsgsValuesParser.parse(minus4Request.retrieve())
+                .filter(location)
+                .filter(UsgsParameter.DISCHARGE_CFS)
+                .first();
+
+        assertTrue(utcRecord.size() > 0, "UTC record should have data");
+        assertTrue(minus4Record.size() > 0, "UTC-4 record should have data");
+
+        // The first timestamp from each request should differ by exactly 4 hours
+        // because the same wall-clock in UTC-4 is 4 hours later in absolute time
+        ZonedDateTime firstUtcTime = utcRecord.getTimes()[0];
+        ZonedDateTime firstMinus4Time = minus4Record.getTimes()[0];
+        Duration offset = Duration.between(firstUtcTime, firstMinus4Time);
+
+        assertEquals(4, offset.toHours(),
+                "First timestamps should be offset by 4 hours, but got " + offset);
     }
 
     @Disabled("Live API smoke test")
