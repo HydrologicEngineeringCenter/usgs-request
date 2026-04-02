@@ -31,6 +31,15 @@ public final class UsgsApiKeyCache {
         }
     }
 
+    public static void clear() {
+        Path file = getCacheFile();
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException e) {
+            LOGGER.log(Level.WARNING, "Failed to clear cached API key", e);
+        }
+    }
+
     public static void save(String apiKey) {
         if (!UsgsApiKeyValidator.isValid(apiKey)) {
             return;

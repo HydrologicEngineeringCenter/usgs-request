@@ -3,16 +3,43 @@ package mil.army.usace.hec.usgs.io;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
+import java.beans.PropertyChangeListener;
 import java.time.Duration;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class UsgsContinuousValuesRequestTest {
+
+    @Disabled("Live API smoke test")
+    @Test
+    void invalidApiKeyRejectedByServer() {
+        String fakeKey = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
+        assertTrue(UsgsApiKeyValidator.isValid(fakeKey));
+
+        UsgsValuesRequest request = UsgsValuesRequest.builder()
+                .addMonitoringLocation(UsgsMonitoringLocation.from("USGS-03034000"))
+                .setService(UsgsService.CONTINUOUS)
+                .setParameter(UsgsParameter.DISCHARGE_CFS)
+                .setDuration(Duration.ofHours(3))
+                .setApiKey(fakeKey)
+                .build();
+
+        List<String> errorMessages = new ArrayList<>();
+        PropertyChangeListener pcl = evt -> {
+            if ("error".equalsIgnoreCase(evt.getPropertyName()) && evt.getNewValue() != null) {
+                errorMessages.add(String.valueOf(evt.getNewValue()));
+            }
+        };
+
+        request.addPropertyChangeListener(pcl);
+
+        assertThrows(UsgsRequestException.class, request::retrieve);
+        assertFalse(errorMessages.isEmpty());
+    }
 
     @Disabled("Live API smoke test")
     @Test
