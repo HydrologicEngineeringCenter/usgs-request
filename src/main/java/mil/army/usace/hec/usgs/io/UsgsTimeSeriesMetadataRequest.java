@@ -142,16 +142,16 @@ public class UsgsTimeSeriesMetadataRequest extends UsgsRequest {
         if (beginTime == null)
             return "";
 
-        // begin time of record is before beginTime specified
-        return "&begin_utc=../" + beginTime.withZoneSameInstant(ZoneOffset.UTC);
+        // record must end after query begin (exclude records entirely before the query window)
+        return "&end_utc=" + beginTime.withZoneSameInstant(ZoneOffset.UTC) + "/..";
     }
 
     private String formatEndTime() {
         if (endTime == null)
             return "";
 
-        // end time of record is after endTime specified
-        return "&end_utc=" + endTime.withZoneSameInstant(ZoneOffset.UTC) + "/..";
+        // record must begin before query end (exclude records entirely after the query window)
+        return "&begin_utc=../" + endTime.withZoneSameInstant(ZoneOffset.UTC);
     }
 
     private static double round(double value) {
