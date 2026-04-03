@@ -37,11 +37,10 @@ Commit message requirements:
 2. Limit the subject line to 50 characters
 3. Capitalize the subject line
 4. Do not end the subject line with a period
-5. Use the imperative mood in the subject line
-6. Do not wrap the body at 72 characters
-7. Use the body to explain what and why vs. how
-8. Use an issue tag if applicable
-9. Separate body from the issue tag with a blank line
+5. Do not put issue tags or ticket numbers in the subject line
+6. Use the imperative mood in the subject line
+7. Do not wrap the body. Write the body as a single continuous paragraph with no manual line breaks
+8. Use the body to explain what and why vs. how
 
 ## Your Identity
 
