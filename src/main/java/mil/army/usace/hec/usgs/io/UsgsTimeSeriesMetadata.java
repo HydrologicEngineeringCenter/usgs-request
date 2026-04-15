@@ -1,7 +1,10 @@
 package mil.army.usace.hec.usgs.io;
 
 import java.time.ZonedDateTime;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.Objects;
+import java.util.Optional;
 
 public class UsgsTimeSeriesMetadata {
     private final String id;
@@ -80,5 +83,58 @@ public class UsgsTimeSeriesMetadata {
 
     public ZonedDateTime getEndTime() {
         return endTime;
+    }
+
+    /**
+     * Narrows a caller-requested [queryBegin, queryEnd] window to the envelope of
+     * actual period-of-record across the supplied metadata. The returned window is
+     * the intersection of the query window with [min(beginTimes), max(endTimes)].
+     * <p>
+     * Use this to avoid issuing values requests for time ranges where no site has
+     * data. Returns an empty Optional when the intersection is empty (no overlap)
+     * or the metadata collection has no begin/end times to bound the query.
+     *
+     * @param metadata   period-of-record entries returned from the metadata query
+     * @param queryBegin caller's requested begin, or null for open-ended
+     * @param queryEnd   caller's requested end, or null for open-ended
+     * @return narrowed [begin, end] window, or empty if there is no overlap
+     */
+    public static Optional<ZonedDateTime[]> narrowWindow(Collection<UsgsTimeSeriesMetadata> metadata,
+                                                         ZonedDateTime queryBegin,
+                                                         ZonedDateTime queryEnd) {
+        if (metadata == null || metadata.isEmpty()) {
+            return Optional.empty();
+        }
+
+        ZonedDateTime envelopeBegin = metadata.stream()
+                .map(UsgsTimeSeriesMetadata::getBeginTime)
+                .filter(Objects::nonNull)
+                .min(Comparator.naturalOrder())
+                .orElse(null);
+        ZonedDateTime envelopeEnd = metadata.stream()
+                .map(UsgsTimeSeriesMetadata::getEndTime)
+                .filter(Objects::nonNull)
+                .max(Comparator.naturalOrder())
+                .orElse(null);
+
+        ZonedDateTime narrowedBegin = latest(queryBegin, envelopeBegin);
+        ZonedDateTime narrowedEnd = earliest(queryEnd, envelopeEnd);
+
+        if (narrowedBegin == null || narrowedEnd == null || !narrowedBegin.isBefore(narrowedEnd)) {
+            return Optional.empty();
+        }
+        return Optional.of(new ZonedDateTime[]{narrowedBegin, narrowedEnd});
+    }
+
+    private static ZonedDateTime latest(ZonedDateTime a, ZonedDateTime b) {
+        if (a == null) return b;
+        if (b == null) return a;
+        return a.isAfter(b) ? a : b;
+    }
+
+    private static ZonedDateTime earliest(ZonedDateTime a, ZonedDateTime b) {
+        if (a == null) return b;
+        if (b == null) return a;
+        return a.isBefore(b) ? a : b;
     }
 }

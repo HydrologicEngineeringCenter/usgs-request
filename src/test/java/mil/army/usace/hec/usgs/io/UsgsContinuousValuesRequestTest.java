@@ -7,6 +7,7 @@ import java.beans.PropertyChangeListener;
 import java.time.Duration;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -187,6 +188,122 @@ class UsgsContinuousValuesRequestTest {
 
         assertEquals(4, offset.toHours(),
                 "First timestamps should be offset by 4 hours, but got " + offset);
+    }
+
+    @Test
+    void chunksLongWindowByYear() {
+        ZonedDateTime begin = ZonedDateTime.of(2018, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+        ZonedDateTime end = begin.plusDays(800);
+
+        UsgsValuesRequest request = UsgsValuesRequest.builder()
+                .setService(UsgsService.CONTINUOUS)
+                .addMonitoringLocation(UsgsMonitoringLocation.from("USGS-03034000"))
+                .setParameter(UsgsParameter.DISCHARGE_CFS)
+                .setStatisticType(UsgsStatisticId.INSTANTANEOUS)
+                .setBeginTime(begin)
+                .setEndTime(end)
+                .build();
+
+        List<String> urls = request.buildRequestUrls();
+        assertEquals(3, urls.size(), "800 days should split into 3 chunks (365 + 365 + 70)");
+
+        String firstBoundary = begin.plusDays(365).withZoneSameInstant(ZoneOffset.UTC)
+                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        String secondChunkBegin = begin.plusDays(365).plusSeconds(1).withZoneSameInstant(ZoneOffset.UTC)
+                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        String secondChunkEnd = begin.plusDays(730).plusSeconds(1).withZoneSameInstant(ZoneOffset.UTC)
+                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        String endFormatted = end.withZoneSameInstant(ZoneOffset.UTC)
+                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+
+        assertTrue(urls.get(0).contains("/" + firstBoundary), "first chunk should end at begin+365d");
+        assertTrue(urls.get(1).contains("=" + secondChunkBegin + "/" + secondChunkEnd),
+                "second chunk should start 1s after prior boundary");
+        assertTrue(urls.get(2).contains("/" + endFormatted), "last chunk should end at caller's endTime");
+    }
+
+    @Test
+    void sixteenYearWindowChunksByYear() {
+        ZonedDateTime begin = ZonedDateTime.of(1980, 12, 27, 6, 0, 0, 0, ZoneOffset.UTC);
+        ZonedDateTime end = ZonedDateTime.of(1997, 1, 15, 6, 0, 0, 0, ZoneOffset.UTC);
+
+        UsgsValuesRequest request = UsgsValuesRequest.builder()
+                .setService(UsgsService.CONTINUOUS)
+                .addMonitoringLocation(UsgsMonitoringLocation.from("USGS-10336580"))
+                .setParameter(UsgsParameter.DISCHARGE_CFS)
+                .setStatisticType(UsgsStatisticId.INSTANTANEOUS)
+                .setBeginTime(begin)
+                .setEndTime(end)
+                .build();
+
+        List<String> urls = request.buildRequestUrls();
+        long spanDays = Duration.between(begin, end).toDays();
+        long expected = (spanDays + 364) / 365;
+        assertEquals(expected, urls.size());
+        for (String url : urls) {
+            assertFalse(url.contains("1980-12-27T06:00:00Z/1997-01-15T06:00:00Z"),
+                    "no chunk should span the full 16-year window");
+        }
+    }
+
+    @Test
+    void shortWindowUsesSingleUrl() {
+        ZonedDateTime begin = ZonedDateTime.of(2024, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+        ZonedDateTime end = begin.plusDays(30);
+
+        UsgsValuesRequest request = UsgsValuesRequest.builder()
+                .setService(UsgsService.CONTINUOUS)
+                .addMonitoringLocation(UsgsMonitoringLocation.from("USGS-03034000"))
+                .setParameter(UsgsParameter.DISCHARGE_CFS)
+                .setStatisticType(UsgsStatisticId.INSTANTANEOUS)
+                .setBeginTime(begin)
+                .setEndTime(end)
+                .build();
+
+        assertEquals(1, request.buildRequestUrls().size());
+    }
+
+    @Test
+    void exactlyMaxWindowUsesSingleUrl() {
+        ZonedDateTime begin = ZonedDateTime.of(2024, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+        ZonedDateTime end = begin.plusDays(365);
+
+        UsgsValuesRequest request = UsgsValuesRequest.builder()
+                .setService(UsgsService.CONTINUOUS)
+                .addMonitoringLocation(UsgsMonitoringLocation.from("USGS-03034000"))
+                .setParameter(UsgsParameter.DISCHARGE_CFS)
+                .setStatisticType(UsgsStatisticId.INSTANTANEOUS)
+                .setBeginTime(begin)
+                .setEndTime(end)
+                .build();
+
+        assertEquals(1, request.buildRequestUrls().size());
+    }
+
+    @Test
+    void durationRequestUsesSingleUrl() {
+        UsgsValuesRequest request = UsgsValuesRequest.builder()
+                .setService(UsgsService.CONTINUOUS)
+                .addMonitoringLocation(UsgsMonitoringLocation.from("USGS-03034000"))
+                .setParameter(UsgsParameter.DISCHARGE_CFS)
+                .setStatisticType(UsgsStatisticId.INSTANTANEOUS)
+                .setDuration(Duration.ofDays(4000))
+                .build();
+
+        assertEquals(1, request.buildRequestUrls().size());
+    }
+
+    @Test
+    void openEndedBeginOnlyUsesSingleUrl() {
+        UsgsValuesRequest request = UsgsValuesRequest.builder()
+                .setService(UsgsService.CONTINUOUS)
+                .addMonitoringLocation(UsgsMonitoringLocation.from("USGS-03034000"))
+                .setParameter(UsgsParameter.DISCHARGE_CFS)
+                .setStatisticType(UsgsStatisticId.INSTANTANEOUS)
+                .setBeginTime(ZonedDateTime.of(2010, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC))
+                .build();
+
+        assertEquals(1, request.buildRequestUrls().size());
     }
 
     @Disabled("Live API smoke test")

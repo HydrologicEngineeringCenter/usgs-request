@@ -10,7 +10,7 @@ import java.util.stream.Collectors;
 
 public abstract class UsgsValuesRequest extends UsgsRequest {
     private static final String FORMAT_JSON = "f=json";
-    private static final String LIMIT_10000 = "&limit=10000";
+    private static final String LIMIT_50000 = "&limit=50000";
 
     private final List<UsgsMonitoringLocation> monitoringLocations;
     private final UsgsService service;
@@ -145,8 +145,27 @@ public abstract class UsgsValuesRequest extends UsgsRequest {
                 formatParameterCode() +
                 formatStatisticId() +
                 formatTime() +
-                LIMIT_10000 +
+                LIMIT_50000 +
                 formatApiKey();
+    }
+
+    String buildUrlForWindow(ZonedDateTime windowBegin, ZonedDateTime windowEnd) {
+        return getServiceUrl() +
+                FORMAT_JSON +
+                formatIds() +
+                formatParameterCode() +
+                formatStatisticId() +
+                "&time=" + toUtcString(windowBegin) + "/" + toUtcString(windowEnd) +
+                LIMIT_50000 +
+                formatApiKey();
+    }
+
+    ZonedDateTime getBeginTime() {
+        return beginTime;
+    }
+
+    ZonedDateTime getEndTime() {
+        return endTime;
     }
 
     public List<UsgsMonitoringLocation> getMonitoringLocations() {
