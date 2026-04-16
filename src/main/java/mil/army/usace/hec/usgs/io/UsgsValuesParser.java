@@ -40,8 +40,9 @@ public class UsgsValuesParser {
         if (json == null)
             return UsgsGageRecords.from(Collections.emptyList());
 
-        // Use a composite key to store time-value pairs by site and parameter
-        Map<SiteParameterKey, List<TimeValuePair>> timeValuePairsBySiteAndParameter = new LinkedHashMap<>();
+        // USGS can return the same (site, parameter, timestamp) under multiple time_series_ids,
+        // so collect into a TreeMap per key to deduplicate by timestamp and keep chronological order.
+        Map<SiteParameterKey, NavigableMap<ZonedDateTime, Double>> valuesByTimeBySiteAndParameter = new LinkedHashMap<>();
 
         try {
             JSONParser parser = new JSONParser();
@@ -58,7 +59,7 @@ public class UsgsValuesParser {
                 if (properties == null) continue;
 
                 String monitoringLocationId = (String) properties.get("monitoring_location_id");
-                
+
                 if (monitoringLocationId == null || !monitoringLocationId.contains("-")) {
                     LOGGER.warning(() -> "Skipping feature with invalid monitoring location ID: " + sanitizeForLog(monitoringLocationId));
                     continue;
@@ -80,9 +81,8 @@ public class UsgsValuesParser {
                 // Create a key for this site and parameter combination
                 SiteParameterKey key = new SiteParameterKey(monitoringLocationId, parameterCode);
 
-                // Store time-value pair by site and parameter
-                timeValuePairsBySiteAndParameter.computeIfAbsent(key, k -> new ArrayList<>())
-                        .add(new TimeValuePair(zonedDateTime, value));
+                valuesByTimeBySiteAndParameter.computeIfAbsent(key, k -> new TreeMap<>())
+                        .put(zonedDateTime, value);
             }
         } catch (ParseException e) {
             LOGGER.log(Level.SEVERE, e, e::getMessage);
@@ -91,25 +91,19 @@ public class UsgsValuesParser {
         // Create UsgsGageRecords grouped by site
         List<UsgsGageRecord> usgsGageRecords = new ArrayList<>();
 
-        for (Map.Entry<SiteParameterKey, List<TimeValuePair>> entry : timeValuePairsBySiteAndParameter.entrySet()) {
+        for (Map.Entry<SiteParameterKey, NavigableMap<ZonedDateTime, Double>> entry : valuesByTimeBySiteAndParameter.entrySet()) {
             try {
                 SiteParameterKey key = entry.getKey();
                 String monitoringLocationId = key.monitoringLocationId;
                 String parameterCode = key.parameterCode;
 
-                List<TimeValuePair> pairs = entry.getValue();
+                NavigableMap<ZonedDateTime, Double> valuesByTime = entry.getValue();
 
-                // Sort pairs by time (chronological order)
-                Collections.sort(pairs);
-
-                // Create separate arrays for times and values
-                ZonedDateTime[] timesArray = new ZonedDateTime[pairs.size()];
-                double[] valuesArray = new double[pairs.size()];
-
-                for (int i = 0; i < pairs.size(); i++) {
-                    TimeValuePair pair = pairs.get(i);
-                    timesArray[i] = pair.time;
-                    valuesArray[i] = pair.value;
+                ZonedDateTime[] timesArray = valuesByTime.keySet().toArray(new ZonedDateTime[0]);
+                double[] valuesArray = new double[valuesByTime.size()];
+                int i = 0;
+                for (Double v : valuesByTime.values()) {
+                    valuesArray[i++] = v;
                 }
 
                 // Create UsgsMonitoringLocation and UsgsParameter
@@ -161,16 +155,5 @@ public class UsgsValuesParser {
      * Composite key for site ID and parameter code
      */
     private record SiteParameterKey(String monitoringLocationId, String parameterCode) {
-    }
-
-    /**
-     * Helper class to keep time and value pairs together for sorting
-     */
-    private record TimeValuePair(ZonedDateTime time, double value) implements Comparable<TimeValuePair> {
-
-        @Override
-        public int compareTo(TimeValuePair other) {
-            return this.time.compareTo(other.time);
-        }
     }
 }
