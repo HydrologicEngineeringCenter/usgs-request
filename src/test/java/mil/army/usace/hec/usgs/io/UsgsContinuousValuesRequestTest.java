@@ -191,7 +191,7 @@ class UsgsContinuousValuesRequestTest {
     }
 
     @Test
-    void chunksLongWindowByYear() {
+    void chunksLongWindowByWaterYear() {
         ZonedDateTime begin = ZonedDateTime.of(2018, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
         ZonedDateTime end = begin.plusDays(800);
 
@@ -205,21 +205,24 @@ class UsgsContinuousValuesRequestTest {
                 .build();
 
         List<String> urls = request.buildRequestUrls();
-        assertEquals(3, urls.size(), "800 days should split into 3 chunks (365 + 365 + 70)");
+        assertEquals(3, urls.size(), "800 days should split into stub + 1 year + partial");
 
-        String firstBoundary = begin.plusDays(365).withZoneSameInstant(ZoneOffset.UTC)
-                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
-        String secondChunkBegin = begin.plusDays(365).plusSeconds(1).withZoneSameInstant(ZoneOffset.UTC)
-                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
-        String secondChunkEnd = begin.plusDays(730).plusSeconds(1).withZoneSameInstant(ZoneOffset.UTC)
-                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        ZonedDateTime firstBoundary = ZonedDateTime.of(2018, 10, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+        ZonedDateTime secondBoundary = ZonedDateTime.of(2019, 10, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+
+        String firstBoundaryStr = firstBoundary.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        String secondChunkBegin = firstBoundary.plusSeconds(1).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        String secondChunkEnd = secondBoundary.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        String thirdChunkBegin = secondBoundary.plusSeconds(1).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
         String endFormatted = end.withZoneSameInstant(ZoneOffset.UTC)
                 .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
 
-        assertTrue(urls.get(0).contains("/" + firstBoundary), "first chunk should end at begin+365d");
+        assertTrue(urls.get(0).contains("/" + firstBoundaryStr),
+                "stub chunk should end at the next 1-October");
         assertTrue(urls.get(1).contains("=" + secondChunkBegin + "/" + secondChunkEnd),
-                "second chunk should start 1s after prior boundary");
-        assertTrue(urls.get(2).contains("/" + endFormatted), "last chunk should end at caller's endTime");
+                "second chunk should span a full water year 1s after prior boundary");
+        assertTrue(urls.get(2).contains("=" + thirdChunkBegin + "/" + endFormatted),
+                "last chunk should run from prior boundary to caller's endTime");
     }
 
     @Test
@@ -264,7 +267,24 @@ class UsgsContinuousValuesRequestTest {
     }
 
     @Test
-    void exactlyMaxWindowUsesSingleUrl() {
+    void fullWaterYearUsesSingleUrl() {
+        ZonedDateTime begin = ZonedDateTime.of(2023, 10, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+        ZonedDateTime end = ZonedDateTime.of(2024, 10, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+
+        UsgsValuesRequest request = UsgsValuesRequest.builder()
+                .setService(UsgsService.CONTINUOUS)
+                .addMonitoringLocation(UsgsMonitoringLocation.from("USGS-03034000"))
+                .setParameter(UsgsParameter.DISCHARGE_CFS)
+                .setStatisticType(UsgsStatisticId.INSTANTANEOUS)
+                .setBeginTime(begin)
+                .setEndTime(end)
+                .build();
+
+        assertEquals(1, request.buildRequestUrls().size());
+    }
+
+    @Test
+    void yearWindowCrossingOctoberSplitsAtWaterYear() {
         ZonedDateTime begin = ZonedDateTime.of(2024, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
         ZonedDateTime end = begin.plusDays(365);
 
@@ -277,7 +297,8 @@ class UsgsContinuousValuesRequestTest {
                 .setEndTime(end)
                 .build();
 
-        assertEquals(1, request.buildRequestUrls().size());
+        assertEquals(2, request.buildRequestUrls().size(),
+                "a window that crosses 1-October should split into a stub and a remainder");
     }
 
     @Test

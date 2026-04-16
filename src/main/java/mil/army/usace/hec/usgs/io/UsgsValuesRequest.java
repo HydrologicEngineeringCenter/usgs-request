@@ -180,6 +180,43 @@ public abstract class UsgsValuesRequest extends UsgsRequest {
         return parameter;
     }
 
+    /**
+     * Split a time range into water-year-aligned chunks. The first chunk ends at the next
+     * 1-October boundary (if one falls before {@code end}); subsequent chunks span a full
+     * calendar year each. USGS records often start and stop on water-year boundaries, so
+     * aligning chunk edges there reduces single-sample boundary artifacts.
+     *
+     * @param begin inclusive start of the overall window
+     * @param end   inclusive end of the overall window
+     * @return ordered list of {@code [chunkBegin, chunkEnd]} pairs covering {@code [begin, end]}
+     */
+    public static List<ZonedDateTime[]> splitByWaterYear(ZonedDateTime begin, ZonedDateTime end) {
+        List<ZonedDateTime[]> chunks = new ArrayList<>();
+        ZonedDateTime current = begin;
+
+        ZonedDateTime nextOct1 = nextWaterYearStart(current);
+        if (nextOct1.isAfter(current) && nextOct1.isBefore(end)) {
+            chunks.add(new ZonedDateTime[]{current, nextOct1});
+            current = nextOct1;
+        }
+
+        while (current.isBefore(end)) {
+            ZonedDateTime next = current.plusYears(1);
+            if (next.isAfter(end)) {
+                next = end;
+            }
+            chunks.add(new ZonedDateTime[]{current, next});
+            current = next;
+        }
+        return chunks;
+    }
+
+    private static ZonedDateTime nextWaterYearStart(ZonedDateTime t) {
+        ZonedDateTime thisOct1 = t.withMonth(10).withDayOfMonth(1)
+                .withHour(0).withMinute(0).withSecond(0).withNano(0);
+        return t.isBefore(thisOct1) ? thisOct1 : thisOct1.plusYears(1);
+    }
+
     abstract String getServiceUrl();
 
     private String formatIds() {
