@@ -218,8 +218,8 @@ public abstract class UsgsRequest {
             if (seconds > 0) {
                 return Math.min(seconds, MAX_RETRY_SECONDS);
             }
-        } catch (NumberFormatException ignored) {
-            // Header may be HTTP-date form; fall back to exponential backoff.
+        } catch (NumberFormatException e) {
+            LOGGER.log(Level.WARNING, () -> "Retry-After header was not a number; falling back to exponential backoff: " + header);
         }
         return fallback;
     }
@@ -263,8 +263,8 @@ public abstract class UsgsRequest {
             if (description != null && !description.isBlank()) {
                 return description;
             }
-        } catch (Exception ignored) {
-            // Not JSON — fall through
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, () -> "Error response body was not valid JSON; falling back to HTML parsing: " + e.getMessage());
         }
 
         // Try HTML error format (legacy)

@@ -32,6 +32,7 @@ class UrlValidator {
 
             return isGovSite(url) && !isPrivateHost(url);
         } catch (MalformedURLException e) {
+            LOGGER.log(Level.WARNING, () -> "Malformed URL rejected: " + e.getMessage());
             return false;
         }
     }
