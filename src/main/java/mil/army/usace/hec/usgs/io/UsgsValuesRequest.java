@@ -12,6 +12,10 @@ public abstract class UsgsValuesRequest extends UsgsRequest {
     private static final String FORMAT_JSON = "f=json";
     private static final String LIMIT_50000 = "&limit=50000";
 
+    // Floor for split(): below this span, halving further isn't worth another
+    // round trip, so a cancellation here is surfaced instead of retried forever.
+    private static final Duration MIN_SPLITTABLE_SPAN = Duration.ofHours(24);
+
     private final List<UsgsMonitoringLocation> monitoringLocations;
     private final UsgsService service;
 
@@ -166,6 +170,34 @@ public abstract class UsgsValuesRequest extends UsgsRequest {
 
     ZonedDateTime getEndTime() {
         return endTime;
+    }
+
+    @Override
+    protected List<UsgsRequest> split() {
+        if (beginTime == null || endTime == null) {
+            return List.of();
+        }
+
+        Duration span = Duration.between(beginTime, endTime);
+        if (span.compareTo(MIN_SPLITTABLE_SPAN) <= 0) {
+            return List.of();
+        }
+
+        ZonedDateTime midpoint = beginTime.plus(span.dividedBy(2));
+
+        return List.of(windowedCopy(beginTime, midpoint), windowedCopy(midpoint, endTime));
+    }
+
+    private UsgsRequest windowedCopy(ZonedDateTime windowBegin, ZonedDateTime windowEnd) {
+        return new Builder()
+                .addMonitoringLocations(monitoringLocations)
+                .setService(service)
+                .setParameter(parameter)
+                .setStatisticType(statisticId)
+                .setBeginTime(windowBegin)
+                .setEndTime(windowEnd)
+                .setApiKey(getApiKey())
+                .build();
     }
 
     public List<UsgsMonitoringLocation> getMonitoringLocations() {

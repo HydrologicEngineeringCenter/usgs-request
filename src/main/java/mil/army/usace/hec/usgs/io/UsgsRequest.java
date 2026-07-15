@@ -8,6 +8,7 @@ import jakarta.ws.rs.core.Response;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -20,12 +21,14 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public abstract class UsgsRequest {
     public static final String ERROR_PROPERTY = "error";
     public static final String PROGRESS_PROPERTY = "progress";
+    private static final int HTTP_BAD_REQUEST = 400;
     private static final int HTTP_TOO_MANY_REQUESTS = 429;
     private static final int HTTP_SERVICE_UNAVAILABLE = 503;
     private static final int MAX_RETRIES = 3;
@@ -52,48 +55,30 @@ public abstract class UsgsRequest {
         return "&api_key=" + apiKey;
     }
 
+    String getApiKey() {
+        return apiKey;
+    }
+
     protected List<String> buildRequestUrls() {
         return List.of(toString());
     }
 
-    @SuppressWarnings("unchecked")
     public String retrieve() {
         Instant start = Instant.now();
 
         List<String> urls = buildRequestUrls();
-        int chunkCount = urls.size();
         String firstRequest = urls.get(0);
 
         try {
-            JSONParser parser = new JSONParser();
-            JSONObject mergedJson = null;
-            JSONArray mergedFeatures = null;
-
-            for (int i = 0; i < chunkCount; i++) {
-                String chunkUrl = urls.get(i);
-                int chunkIndex = i + 1;
-
-                JSONObject chunkJson = retrieveChunk(parser, chunkUrl, chunkIndex, chunkCount, mergedFeatures);
-
-                if (mergedJson == null) {
-                    mergedJson = chunkJson;
-                    mergedFeatures = (JSONArray) mergedJson.get("features");
-                    if (mergedFeatures == null) {
-                        mergedFeatures = new JSONArray();
-                        mergedJson.put("features", mergedFeatures);
-                    }
-                } else {
-                    JSONArray chunkFeatures = (JSONArray) chunkJson.get("features");
-                    if (chunkFeatures != null) {
-                        mergedFeatures.addAll(chunkFeatures);
-                    }
-                }
+            return retrieveAll(urls);
+        } catch (UsgsQueryCancelledException e) {
+            List<UsgsRequest> halves = split();
+            if (halves.isEmpty()) {
+                fireError(e.getMessage());
+                throw e;
             }
-
-            int totalRetrieved = mergedFeatures.size();
-            mergedJson.put("numberReturned", totalRetrieved);
-            fireProgress(Messages.format("retrieved.all.records", totalRetrieved));
-            return mergedJson.toJSONString();
+            halves.forEach(this::copyListenersTo);
+            return retrieveSplit(halves);
         } catch (UsgsRequestException e) {
             throw e;
         } catch (Exception e) {
@@ -108,6 +93,85 @@ public abstract class UsgsRequest {
             LOGGER.info(timing);
             fireProgress(timing);
         }
+    }
+
+    /**
+     * Splits this request's query window into narrower sub-requests, if it knows how to,
+     * for use when the server cancels the query for running too long. The base
+     * implementation cannot split (it has no concept of a time window) and returns an
+     * empty list, which surfaces the cancellation to the caller as-is.
+     */
+    protected List<UsgsRequest> split() {
+        return List.of();
+    }
+
+    @SuppressWarnings("unchecked")
+    private String retrieveAll(List<String> urls) throws Exception {
+        JSONParser parser = new JSONParser();
+        JSONObject mergedJson = null;
+        JSONArray mergedFeatures = null;
+        int chunkCount = urls.size();
+
+        for (int i = 0; i < chunkCount; i++) {
+            String chunkUrl = urls.get(i);
+            int chunkIndex = i + 1;
+
+            JSONObject chunkJson = retrieveChunk(parser, chunkUrl, chunkIndex, chunkCount, mergedFeatures);
+
+            if (mergedJson == null) {
+                mergedJson = chunkJson;
+                mergedFeatures = (JSONArray) mergedJson.get("features");
+                if (mergedFeatures == null) {
+                    mergedFeatures = new JSONArray();
+                    mergedJson.put("features", mergedFeatures);
+                }
+            } else {
+                JSONArray chunkFeatures = (JSONArray) chunkJson.get("features");
+                if (chunkFeatures != null) {
+                    mergedFeatures.addAll(chunkFeatures);
+                }
+            }
+        }
+
+        int totalRetrieved = mergedFeatures.size();
+        mergedJson.put("numberReturned", totalRetrieved);
+        fireProgress(Messages.format("retrieved.all.records", totalRetrieved));
+        return mergedJson.toJSONString();
+    }
+
+    // Reruns the cancelled query as narrower sub-requests (each running its own retrieve(),
+    // so it can recurse into further splits) and stitches their features back into one
+    // response, rather than surfacing the cancellation once a smaller window would have worked.
+    @SuppressWarnings("unchecked")
+    private String retrieveSplit(List<UsgsRequest> halves) {
+        fireProgress(Messages.format("query.cancelled.splitting", halves.size()));
+        LOGGER.info(() -> "Query cancelled by server; retrying as " + halves.size() + " smaller time windows");
+
+        JSONObject mergedJson = null;
+        JSONArray mergedFeatures = new JSONArray();
+
+        for (UsgsRequest half : halves) {
+            String response = half.retrieve();
+            JSONObject halfJson;
+            try {
+                halfJson = (JSONObject) new JSONParser().parse(response);
+            } catch (ParseException e) {
+                throw new UsgsRequestException(Messages.format("failed.to.retrieve", "split window"), e);
+            }
+
+            if (mergedJson == null) {
+                mergedJson = halfJson;
+            }
+
+            JSONArray halfFeatures = (JSONArray) halfJson.get("features");
+            if (halfFeatures != null) {
+                mergedFeatures.addAll(halfFeatures);
+            }
+        }
+
+        mergedJson.put("features", mergedFeatures);
+        mergedJson.put("numberReturned", mergedFeatures.size());
+        return mergedJson.toJSONString();
     }
 
     @SuppressWarnings("unchecked")
@@ -183,8 +247,16 @@ public abstract class UsgsRequest {
                 }
 
                 String errorMessage = extractErrorMessage(body, request);
+                String formatted = Messages.format("http.error", status, errorMessage);
+                if (isQueryCancelled(status, errorMessage)) {
+                    // Do not fireError() here - retrieve() may still recover this by
+                    // splitting the window, and firing ERROR_PROPERTY tells callers
+                    // (like hec-hms) the whole request failed even when it goes on
+                    // to succeed via the split retry.
+                    throw new UsgsQueryCancelledException(formatted);
+                }
                 fireError(errorMessage);
-                throw new UsgsRequestException(Messages.format("http.error", status, errorMessage));
+                throw new UsgsRequestException(formatted);
             } catch (UsgsRequestException e) {
                 throw e;
             } catch (ProcessingException | IOException e) {
@@ -245,6 +317,11 @@ public abstract class UsgsRequest {
         return null;
     }
 
+    private static boolean isQueryCancelled(int status, String message) {
+        return status == HTTP_BAD_REQUEST && message != null
+                && message.toLowerCase(Locale.ROOT).contains("long running query");
+    }
+
     private static void checkForApiError(JSONObject json) {
         Object code = json.get("code");
         if (code != null && !json.containsKey("features")) {
@@ -296,6 +373,15 @@ public abstract class UsgsRequest {
 
     public void addPropertyChangeListener(PropertyChangeListener pcl) {
         support.addPropertyChangeListener(pcl);
+    }
+
+    // So a split sub-request's own progress/error events still reach whatever listener
+    // the caller attached to the original request, instead of firing on the sub-request's
+    // own unobserved PropertyChangeSupport.
+    private void copyListenersTo(UsgsRequest other) {
+        for (PropertyChangeListener listener : support.getPropertyChangeListeners()) {
+            other.addPropertyChangeListener(listener);
+        }
     }
 
     public void removePropertyChangeListener(PropertyChangeListener pcl) {

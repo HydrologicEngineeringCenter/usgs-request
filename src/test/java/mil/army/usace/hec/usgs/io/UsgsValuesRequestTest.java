@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -145,6 +146,59 @@ class UsgsValuesRequestTest {
                 .build();
 
         assertTrue(request.toString().contains("&time=../2024-02-01T00:00:00Z"));
+    }
+
+    @Test
+    void splitBisectsWindowAndPreservesRequestDetails() {
+        ZonedDateTime begin = ZonedDateTime.of(2023, 10, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+        ZonedDateTime end = begin.plusDays(365);
+        String apiKey = "abcd1234abcd1234abcd1234abcd1234abcd1234";
+
+        UsgsValuesRequest request = validBuilder()
+                .setStatisticType(UsgsStatisticId.INSTANTANEOUS)
+                .setBeginTime(begin)
+                .setEndTime(end)
+                .setApiKey(apiKey)
+                .build();
+
+        List<UsgsRequest> halves = request.split();
+        assertEquals(2, halves.size());
+
+        UsgsValuesRequest first = (UsgsValuesRequest) halves.get(0);
+        UsgsValuesRequest second = (UsgsValuesRequest) halves.get(1);
+
+        ZonedDateTime midpoint = begin.plus(Duration.between(begin, end).dividedBy(2));
+        assertEquals(begin, first.getBeginTime());
+        assertEquals(midpoint, first.getEndTime());
+        assertEquals(midpoint, second.getBeginTime());
+        assertEquals(end, second.getEndTime());
+
+        assertEquals(1, first.getMonitoringLocations().size());
+        assertEquals(testLocation(), first.getMonitoringLocations().get(0));
+        assertTrue(first.toString().contains("api_key=" + apiKey));
+        assertTrue(first.toString().contains("statistic_id="));
+    }
+
+    @Test
+    void splitStopsAtMinimumSpan() {
+        ZonedDateTime begin = ZonedDateTime.of(2024, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+        ZonedDateTime end = begin.plusHours(24);
+
+        UsgsValuesRequest request = validBuilder()
+                .setBeginTime(begin)
+                .setEndTime(end)
+                .build();
+
+        assertTrue(request.split().isEmpty());
+    }
+
+    @Test
+    void splitEmptyWhenNoTimeWindow() {
+        UsgsValuesRequest request = validBuilder()
+                .setDuration(Duration.ofHours(3))
+                .build();
+
+        assertTrue(request.split().isEmpty());
     }
 
     @Test
