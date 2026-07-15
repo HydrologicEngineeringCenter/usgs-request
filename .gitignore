@@ -11,13 +11,13 @@
 !/gradlew
 !/gradlew.bat
 !/gradle.properties
-!/AGENTS.MD
-!/CLAUDE.MD
+!/AGENTS.md
+!/CLAUDE.md
 !/CITATION.cff
 !/CONTRIBUTORS.md
 !/CONTRIBUTING.md
 !/INTENT.md
-!/LICENSE.MD
+!/LICENSE.md
 !/README.md
-!/STANDARDS.MD
+!/STANDARDS.md
 !/settings.gradle
